@@ -72,19 +72,34 @@ skipped with a warning rather than copied silently.
 
 ## Substitution rules
 
-Inside the **allowlisted text files** (excluding `app.py` and `.env`, which have
-their own config paths), the script rewrites the following placeholders:
+The script rewrites the following placeholders inside every text file it
+copies (excluding `.env`, which is written from scratch):
 
-| Placeholder        | Replacement            | Where it appears          |
-|--------------------|------------------------|----------------------------|
-| `<nickname>`       | user's slug            | docs, launcher title      |
-| `{{nickname}}`     | user's slug            | docs                      |
-| `AGNES_API_KEY=*`  | the user's API key     | `.env` only                |
-| `WORKBENCH_NICK=*` | the user's slug        | `.env` only                |
+| Placeholder        | Replacement            | Where it appears                              |
+|--------------------|------------------------|-----------------------------------------------|
+| `<nickname>`       | user's slug            | docs, launcher, `app.py`, `static/*.html`, `static/*.js` |
+| `{{nickname}}`     | user's slug            | docs (legacy alias)                          |
+| `AGNES_API_KEY=*`  | the user's API key     | `.env` only                                  |
+| `WORKBENCH_NICK=*` | the user's slug        | `.env` only                                  |
 
-If a file outside the allowlist needs the placeholder substituted, add it to
-`ALLOWED_FILES` in `scripts/scaffold.sh` and re-publish both this skill and the
-template repo.
+The Python entrypoint (`app.py`) and every `.html` / `.js` file under
+`static/` are included so the workspace's brand label (window title,
+`<h1>`, page header, runtime banner) reflects the user's nickname rather
+than the template's hard-coded default. Binary assets under `static/` (`.png`,
+`.svg`, fonts, etc.) are **not** rewritten.
+
+If a new top-level text file ever needs the placeholder substituted, the
+script will pick it up automatically as long as it matches the allowlist —
+no further change to `scaffold.sh` is required.
+
+### Why `<nickname>` is also the product label
+
+The nickname doubles as the visible product name inside the scaffolded
+workspace (e.g. window title, page header, runtime banner, README).
+That keeps the substitution contract to a single user-supplied string and
+avoids a separate "brand name" question. If a future user wants a different
+display name from their directory slug, add a second placeholder
+(e.g. `<brand>`) and a matching CLI flag.
 
 ## How to keep the template in sync with the meta-project
 

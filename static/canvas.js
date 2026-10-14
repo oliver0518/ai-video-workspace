@@ -803,7 +803,7 @@ function setView(name) {
     ? "操作日志"
     : works
       ? "作品集"
-      : "秋白漫剧工作台";
+      : "<nickname>漫剧工作台";
   byId("openWorkDialog").hidden = !works;
   byId("titleHelp").hidden = works || logs;
   document.querySelectorAll(".side-tab").forEach((button) => {

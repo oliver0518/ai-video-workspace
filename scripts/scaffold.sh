@@ -247,14 +247,29 @@ if sed --version >/dev/null 2>&1; then  # GNU sed (Linux)
 else                                        # BSD sed (macOS)
   SED_INPLACE=(-i "")
 fi
-# We deliberately do NOT rewrite app.py or .env (those have their own config
-# mechanisms). Only rewrite human-readable docs / titles.
-for f in "$DEST/需求文档.md" "$DEST/启动工作台.command"; do
+# Scope is: human-readable docs + the Python entrypoint (app.py) + every
+# .html / .js file under static/. We deliberately skip .env (handled above)
+# and any binary asset (.png/.jpg/.ico/.woff/.svg fonts etc.) under static/
+# because sed would corrupt them.
+files_to_rewrite=(
+  "$DEST/需求文档.md"
+  "$DEST/启动工作台.command"
+  "$DEST/app.py"
+)
+if [[ -d "$DEST/static" ]]; then
+  while IFS= read -r -d '' f; do
+    files_to_rewrite+=("$f")
+  done < <(find "$DEST/static" -type f \( -name "*.html" -o -name "*.js" \) -print0)
+fi
+placeholder_count=0
+for f in "${files_to_rewrite[@]}"; do
   if [[ -f "$f" ]]; then
+    before=$(grep -c "<nickname>\|{{nickname}}" "$f" 2>/dev/null || echo 0)
     sed "${SED_INPLACE[@]}" "s/<nickname>/$NICKNAME/g; s/{{nickname}}/$NICKNAME/g" "$f"
+    placeholder_count=$((placeholder_count + before))
   fi
 done
-echo "==> replaced <nickname> placeholders in template docs"
+echo "==> replaced $placeholder_count <nickname> placeholder(s) in template files"
 
 # ---- 4. git init + commit ---------------------------------------------------
 cd "$DEST"

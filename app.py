@@ -1505,7 +1505,7 @@ def main() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}"
     key = api_key()
-    print(f"秋白漫剧工作台：{url}", flush=True)
+    print(f"<nickname>漫剧工作台：{url}", flush=True)
     print(f"密钥：{mask_key(key) if key else '未配置，请检查 .env'}", flush=True)
     print("关闭这个窗口即停止服务。成片保存在 outputs 文件夹。", flush=True)
     threading.Timer(0.4, lambda: webbrowser.open(url)).start()

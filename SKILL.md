@@ -22,6 +22,12 @@ remote is configured, and no `gh` authentication is required. Pass
 `--push` to the script (or ask the user before running it) to also create
 a private GitHub repo and push.
 
+The workspace's visible brand label (window title, `<h1>`, page header,
+runtime banner, README) is derived from `<nickname>` — every template
+literal that carried the previous brand ("秋白漫剧工作台" /
+"秋白漫记视频工作台") is rewritten to `<nickname>漫剧工作台` /
+`<nickname>漫记视频工作台` during scaffold.
+
 ## Inputs to collect
 
 The skill is fully driven by two values from the user. Ask for them up front, in one
@@ -34,14 +40,16 @@ breath — never infer from env vars, never read `~/.zshrc`, never guess a nickn
    name, repo name, and `.env` `WORKBENCH_NICK` variable. If the user gives a longer
    Chinese name, ask them to translate to a slug (or pick one yourself and confirm).
 
-Optional, with sensible defaults — confirm rather than re-ask:
+Optional, with sensible defaults — **do not ask**:
 
 - **Destination parent dir** — defaults to `~/Desktop`. The actual directory
   will be `~/Desktop/<nickname>-workspace`. Skip if the user just said "桌面".
-- **Push to GitHub?** — defaults to **no**. The skill produces a local-only
-  workspace unless the user explicitly says "推到 GitHub" / "push" / "publish".
-  If they do, pass `--push` to the script and ask about visibility (defaults
-  to `private`).
+- **Push to GitHub?** — defaults to **no**. Do **not** ask the user whether
+  to push. The skill produces a local-only workspace unless the user
+  **explicitly** says "推到 GitHub" / "push" / "publish" / "publish to GitHub".
+  Asking "要不要推到 GitHub?" on every run is a noise tax the user has
+  flagged as unwanted. If they do opt in, pass `--push` to the script and
+  ask about visibility (defaults to `private`).
 
 Never ask for: GitHub owner (use `gh` CLI's logged-in account, only when `--push`),
 git author (the script picks a sane default), or platform details (the script
@@ -81,8 +89,13 @@ detects macOS vs Linux).
    2. Write `<dest>/.env` from `.env.example`, substituting `AGNES_API_KEY=<key>` and
       `WORKBENCH_NICK=<slug>`. The script refuses to leave the previous user's
       `.env` intact.
-   3. Replace `<nickname>` placeholders inside the template files (e.g. any default
-      title, README) using a single `sed -i ''` pass with the slug.
+   3. Replace `<nickname>` placeholders inside the template files using a single
+      `sed -i ''` pass with the slug. The scope covers `app.py`, every `.html`
+      and `.js` file under `static/`, plus `需求文档.md` and `启动工作台.command`,
+      so the workspace's window title, `<h1>`, page header, runtime banner
+      and README all reflect the user's nickname instead of the template's
+      hard-coded default brand. Binary assets under `static/` (`.png`, `.svg`,
+      fonts) are intentionally skipped.
    4. `git init`, `git add .`, `git commit -m "chore: initial scaffold for
       <nickname>-workspace"`. The `.gitignore` from the template excludes the
       user-data files copied in step 1 (verify before commit).
