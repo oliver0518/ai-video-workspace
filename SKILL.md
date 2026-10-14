@@ -49,7 +49,12 @@ Never ask for: GitHub owner (use `gh` CLI's logged-in account), git author (use
    is deterministic and does five things in order:
 
    0. **Fetch the template** if `--source` was not given. Default = `gh repo clone
-      oliver0518/ai-video-workspace-template` into a scratch dir (cloned with `--depth 1`).
+      oliver0518/ai-video-workspace` into a scratch dir (cloned with `--depth 1`).
+      The skill is self-hosted: this same repo carries `SKILL.md / scripts/ /
+      references / docs/` (the skill itself) plus the allowlisted meta-project
+      files at the repo root. The denylist in `scripts/scaffold.sh` strips the
+      skill-side files before copying into the user's new workspace, so the skill
+      never ships into a scaffolded workbench.
       The scratch dir is wiped on exit. Reason: this keeps the skill self-contained —
       users do not need a local copy of the template on disk.
    1. Copy the whitelist of template files (see `references/source-template.md`) from

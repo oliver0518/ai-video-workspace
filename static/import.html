@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>秋白漫剧工作台 · 作品导入</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    background: linear-gradient(160deg, #f5f7fa 0%, #e9eef5 100%);
+  }
+  .card {
+    width: min(560px, 92vw); padding: 40px 36px; border-radius: 24px;
+    background: rgba(255,255,255,0.9); box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+    backdrop-filter: blur(12px); border: 1px solid rgba(0,0,0,0.05);
+  }
+  h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; color: #1d1d1f; }
+  .sub { margin: 0 0 28px; font-size: 14px; color: #6e6e73; line-height: 1.6; }
+  #drop {
+    border: 2px dashed #c7cdd4; border-radius: 16px; padding: 36px 20px; text-align: center;
+    cursor: pointer; transition: all .2s; background: #fafbfc;
+  }
+  #drop:hover, #drop.dragover { border-color: #007aff; background: #f0f7ff; }
+  #drop .icon { font-size: 34px; margin-bottom: 10px; }
+  #drop .main { font-size: 15px; color: #1d1d1f; margin-bottom: 4px; }
+  #drop .hint { font-size: 13px; color: #86868b; }
+  #fileInput { display: none; }
+  #status { margin-top: 20px; font-size: 14px; line-height: 1.7; }
+  .ok { color: #1d7f3a; }
+  .err { color: #d0342c; }
+  #result { margin-top: 12px; font-size: 14px; line-height: 1.8; display: none; }
+  #result a { color: #007aff; text-decoration: none; font-weight: 500; }
+  #result a:hover { text-decoration: underline; }
+  .btn {
+    display: inline-block; margin-top: 14px; padding: 10px 22px; border-radius: 12px;
+    background: #007aff; color: #fff; border: none; font-size: 14px; font-weight: 500;
+    cursor: pointer; text-decoration: none;
+  }
+  .btn:hover { background: #0066d6; }
+  #detail { margin-top: 14px; font-size: 13px; color: #86868b; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>作品数据导入</h1>
+  <p class="sub">将导出的作品 JSON 文件导入当前浏览器。导入后即可在作品列表看到项目。<br>数据保存在当前浏览器的 IndexedDB 中，更换浏览器需重新导入。</p>
+
+  <div id="drop">
+    <div class="icon">📄</div>
+    <div class="main">点击选择或拖入作品 JSON 文件</div>
+    <div class="hint">支持 da…project.json 等导出文件</div>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json">
+
+  <div id="status"></div>
+  <div id="result"></div>
+</div>
+
+<script>
+function openCanvasDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("agnes-canvas", 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("projects")) db.createObjectStore("projects", { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+const drop = document.getElementById("drop");
+const fileInput = document.getElementById("fileInput");
+const statusEl = document.getElementById("status");
+const resultEl = document.getElementById("result");
+
+drop.addEventListener("click", () => fileInput.click());
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("dragover"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("dragover"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault(); drop.classList.remove("dragover");
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function countTypes(cards) {
+  const c = { character: 0, scene: 0, prop: 0, text: 0, video: 0, other: 0 };
+  (cards || []).forEach((card) => { const t = card.type; if (t in c) c[t]++; else c.other++; });
+  return c;
+}
+
+async function handleFile(file) {
+  statusEl.className = ""; statusEl.textContent = "正在解析文件…";
+  resultEl.style.display = "none"; resultEl.innerHTML = "";
+  let data;
+  try {
+    const text = await file.text();
+    data = JSON.parse(text);
+  } catch (e) {
+    statusEl.className = "err";
+    statusEl.textContent = "文件解析失败：" + e.message;
+    return;
+  }
+  // 支持单对象或多对象数组
+  const items = Array.isArray(data) ? data : [data];
+  const valid = items.filter((it) => it && typeof it === "object" && it.id && Array.isArray(it.cards));
+  if (!valid.length) {
+    statusEl.className = "err";
+    statusEl.textContent = "文件中未找到有效的作品数据（需要含 id 和 cards 字段）。";
+    return;
+  }
+  try {
+    const db = await openCanvasDb();
+    const tx = db.transaction("projects", "readwrite");
+    const store = tx.objectStore("projects");
+    const imported = [];
+    for (const item of valid) {
+      const copy = JSON.parse(JSON.stringify(item));
+      copy.updatedAt = Date.now();
+      store.put(copy);
+      imported.push(copy);
+    }
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+
+    const first = imported[0];
+    const counts = countTypes(first.cards);
+    statusEl.className = "ok";
+    statusEl.textContent = `导入成功，共 ${imported.length} 个作品。`;
+    resultEl.style.display = "block";
+    resultEl.innerHTML = `
+      <div><b>${first.name || first.title || first.id}</b>（id: ${first.id}）</div>
+      <div>卡片：${first.cards.length} 张（人物 ${counts.character} / 场景 ${counts.scene} / 道具 ${counts.prop} / 其他 ${counts.text + counts.video + counts.other}）</div>
+      <a class="btn" href="./#works/${encodeURIComponent(first.id)}">打开作品画布 →</a>`;
+  } catch (e) {
+    statusEl.className = "err";
+    statusEl.textContent = "写入 IndexedDB 失败：" + e.message;
+  }
+}
+</script>
+</body>
+</html>

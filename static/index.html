@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>秋白漫剧工作台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="mark">秋</div>
+    <div class="brand-copy">
+      <h1 id="pageTitle">秋白漫剧工作台</h1>
+      <div class="pills">
+        <button type="button" class="keyline" id="keyline">正在检查密钥…</button>
+        <button type="button" class="keyline" id="balance">余额…</button>
+      </div>
+    </div>
+  </div>
+  <div class="icon-row">
+    <span class="help" id="titleHelp">
+      <button type="button" class="help-btn" aria-label="帮助">?</button>
+      <span class="help-tip">本地视频生成工作台：密钥配置在项目 .env 的 AGNES_API_KEY，改完重启服务生效。任务记录保存在 jobs.json，成片在 outputs/。点击余额可刷新。</span>
+    </span>
+    <button type="button" class="icon-btn" id="openWorkDialog" aria-label="添加作品">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <span class="icon-tip">添加作品</span>
+    </button>
+  </div>
+</header>
+
+<nav class="view-switch" aria-label="视图切换">
+  <button type="button" class="side-tab on" data-view="bench">工作台</button>
+  <button type="button" class="side-tab" data-view="canvas">画布</button>
+</nav>
+
+<main id="bench">
+  <section class="desk">
+    <form id="form" autocomplete="off">
+      <fieldset>
+        <legend>模型</legend>
+        <select id="model" name="model" style="width:100%;border:0;background:var(--fill);border-radius:12px;padding:10px 12px;">
+          <option value="agnes-video-2.5-flash">2.5 Flash</option>
+          <option value="agnes-video-2.5">2.5</option>
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>生成方式</legend>
+        <div class="seg modes" id="mode">
+          <label><input type="radio" name="mode" value="text" checked>文生视频<span>纯文本提示词</span></label>
+          <label><input type="radio" name="mode" value="reference">参考图<span>上传图片或从图库选</span></label>
+          <label><input type="radio" name="mode" value="keyframe">首尾帧<span>上传首帧与尾帧</span></label>
+        </div>
+      </fieldset>
+
+      <div class="field" id="sizeField">
+        <span>清晰度 <span class="help">
+          <button type="button" class="help-btn" aria-label="清晰度说明">?</button>
+          <span class="help-tip">目前仅支持 720P。</span>
+        </span></span>
+        <div class="choices" id="sizes"></div>
+      </div>
+
+      <div class="field">
+        <span>画幅</span>
+        <div class="choices" id="aspects"></div>
+      </div>
+
+      <p id="specLine" style="margin:0;font-size:12px;color:var(--dim);"></p>
+      <p id="priceLine" style="margin:0;font-size:12px;color:var(--dim);"></p>
+
+      <div class="field">
+        <span>提示词</span>
+        <div class="chips" id="examples">
+          <button type="button" data-prompt="一只橘猫在窗台上打盹，午后阳光透过纱帘">橘猫打盹</button>
+          <button type="button" data-prompt="城市夜景延时摄影，车流如织，霓虹闪烁">城市夜景</button>
+          <button type="button" data-prompt="海边的日落，浪花拍打礁石，海鸥飞过">海边日落</button>
+        </div>
+        <textarea id="prompt" placeholder="描述画面内容，生成 4~12 秒视频…"></textarea>
+      </div>
+
+      <div class="grid">
+        <div class="field">
+          <span>时长</span>
+          <input type="range" id="seconds" min="4" max="12" step="1" value="12">
+          <span id="secondsLabel" style="font-size:13px;color:var(--muted);">12 秒</span>
+        </div>
+        <div class="field">
+          <span>种子（可留空）</span>
+          <input inputmode="numeric" id="seed" placeholder="随机">
+        </div>
+      </div>
+
+      <div class="panel" id="videoBox" hidden>
+        <span style="font-size:13px;font-weight:600;">参考视频</span>
+        <input type="url" id="videoUrl" placeholder="https://视频链接">
+        <div class="grid">
+          <div class="field">
+            <span style="font-size:13px;font-weight:600;">起始秒</span>
+            <input inputmode="decimal" id="videoStart" placeholder="0">
+          </div>
+          <label class="check"><input type="checkbox" id="videoAudio"> 保留原声</label>
+        </div>
+        <button type="button" class="add" id="addAudio">添加音频</button>
+        <div class="stack" id="audioList"></div>
+      </div>
+
+      <div class="panel" id="keyframePanel" hidden>
+        <span style="font-size:13px;font-weight:600;">首帧</span>
+        <input type="url" id="firstFrame" placeholder="https://首帧图链接">
+        <span style="font-size:13px;font-weight:600;">尾帧</span>
+        <input type="url" id="lastFrame" placeholder="https://尾帧图链接">
+      </div>
+
+      <div class="panel" id="referencePanel" hidden>
+        <button type="button" class="add" id="pickImages">上传参考图</button>
+        <input type="file" id="imageFiles" accept="image/*" multiple hidden>
+        <ul class="thumbs" id="imagePreview"></ul>
+        <div id="imageLibraryBlock" hidden>
+          <span style="font-size:13px;font-weight:600;">参考图库</span>
+          <ul class="thumbs" id="imageLibrary"></ul>
+        </div>
+      </div>
+
+      <p class="warn" id="formError" hidden></p>
+
+      <div class="submit-row">
+        <button type="button" class="new-task" id="newTask">新任务</button>
+        <button type="submit" class="go" id="submit">生成视频</button>
+      </div>
+    </form>
+
+    <div class="queue-block">
+      <h2 id="queueHead" hidden>队列</h2>
+      <ul class="queue-titles" id="queue"></ul>
+    </div>
+
+    <div class="history-head">
+      <h2>生成记录</h2>
+    </div>
+    <ul class="history" id="history"></ul>
+  </section>
+
+  <section class="stage">
+    <div class="screen">
+      <div class="empty" id="empty">
+        <b>还没有成片</b>
+        <span>写好提示词后点生成。完成后在这里播放。</span>
+      </div>
+      <div class="live" id="live" hidden>
+        <b id="liveTitle">正在生成</b>
+        <span id="liveDetail"></span>
+        <div class="bar"><i id="liveBar" style="width:0%"></i></div>
+        <span id="livePercent">0%</span>
+      </div>
+      <video id="player" controls playsinline hidden></video>
+    </div>
+    <div class="actions" id="now" hidden>
+      <a class="add" id="openRemote" target="_blank" rel="noreferrer">打开远程地址</a>
+      <button type="button" class="add" id="revealFolder">打开成片文件夹</button>
+      <button type="button" class="add" id="revealFile">打开文件</button>
+      <p class="warn" id="nowError" hidden></p>
+    </div>
+  </section>
+</main>
+
+<div class="shell">
+  <section id="worksHome" hidden>
+    <div class="works-page">
+      <h2 style="margin-top:0;">作品集</h2>
+      <div class="work-grid" id="workGrid"></div>
+    </div>
+  </section>
+
+  <section id="canvasView" hidden>
+    <div class="canvas-page">
+      <aside class="canvas-rail" id="canvasRail">
+        <div class="rail-head">
+          <button type="button" class="icon-btn" id="backWorks" aria-label="返回作品集">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+            <span class="icon-tip">返回作品集</span>
+          </button>
+          <input class="rail-title" id="canvasTitle" value="未命名作品">
+          <button type="button" class="icon-btn rail-fold-all" id="railFoldAll" aria-label="全部收起" title="全部收起">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            <span class="icon-tip">全部收起</span>
+          </button>
+        </div>
+        <div class="rail-section" data-rail-section="brief">
+          <button type="button" class="rail-section-head" aria-expanded="true">
+            <svg class="rail-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            <span class="rail-label">简介</span>
+          </button>
+          <div class="rail-section-body">
+            <textarea class="rail-brief" id="canvasBriefEdit" placeholder="作品简介"></textarea>
+          </div>
+        </div>
+        <fieldset class="rail-section canvas-cover-field" data-rail-section="cover">
+          <button type="button" class="rail-section-head" aria-expanded="true">
+            <svg class="rail-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            <span class="rail-label">封面</span>
+            <button type="button" class="icon-btn rail-section-action" id="canvasCoverBtn" aria-label="更换封面" tabindex="-1">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h12l-3-3M20 16H8l3 3"/></svg>
+            </button>
+          </button>
+          <div class="rail-section-body">
+            <button type="button" class="cover-preview-btn" id="canvasCoverHit">
+              <img id="canvasCoverPreview" alt="封面预览" hidden>
+              <span class="cover-placeholder">封面</span>
+            </button>
+            <input type="file" id="canvasCover" accept="image/*" hidden>
+          </div>
+        </fieldset>
+        <div class="rail-section rail-cards" data-rail-section="cards">
+          <button type="button" class="rail-section-head" aria-expanded="true">
+            <svg class="rail-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            <h3 class="rail-cards-title">画布组件</h3>
+          </button>
+          <div class="rail-section-body">
+            <ul class="side-list" id="cardList"></ul>
+          </div>
+        </div>
+        <button type="button" class="rail-log-btn" id="openLogs">操作日志</button>
+      </aside>
+      <div class="canvas-stage">
+        <div class="viewport" id="viewport">
+          <div class="board" id="board"></div>
+        </div>
+        <div class="select-bar" id="selectBar" hidden>
+          <span id="selectBarLabel">已选 1 个</span>
+          <button type="button" id="groupSelectionBtn" hidden>成组</button>
+          <div class="group-panel" id="groupPanel" hidden>
+            <input type="text" id="groupNameInput" placeholder="组名" maxlength="40">
+            <div class="color-swatches" id="colorSwatches"></div>
+            <input type="color" id="groupColorInput" title="自定义颜色" value="#3b82f6">
+            <button type="button" id="sortGroupBtn" title="按组件名字横向排序">排序</button>
+            <button type="button" id="deleteGroupBtn">解组</button>
+          </div>
+        </div>
+        <div class="zoom-bar">
+          <button type="button" id="zoomOut" aria-label="缩小">−</button>
+          <span id="zoomLabel">100%</span>
+          <button type="button" id="zoomIn" aria-label="放大">+</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="logsView" hidden>
+    <div class="logs-page">
+      <div class="logs-head">
+        <button type="button" class="icon-btn" id="backLogs" aria-label="返回画布">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+          <span class="icon-tip">返回画布</span>
+        </button>
+        <div class="logs-head-copy">
+          <h2>操作日志</h2>
+          <span id="logsProjectName"></span>
+        </div>
+      </div>
+      <div class="logs-list" id="logsList"></div>
+    </div>
+  </section>
+
+</div>
+
+<dialog id="confirmDialog">
+  <form method="dialog">
+    <p id="confirmMessage"></p>
+    <div class="dialog-actions">
+      <button type="submit" class="dialog-btn" value="cancel">取消</button>
+      <button type="submit" class="dialog-btn dialog-btn-danger" value="ok">确定</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="workDialog">
+  <form class="work-form" id="workForm">
+    <div class="dialog-head">
+      <h2>添加作品</h2>
+      <button type="button" class="icon-btn" id="closeWorkDialog" aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        <span class="icon-tip">关闭</span>
+      </button>
+    </div>
+    <input id="workName" placeholder="作品标题">
+    <textarea id="workBrief" placeholder="简介" style="min-height:72px;"></textarea>
+    <img id="workCoverPreview" alt="封面预览" hidden>
+    <label class="check" style="position:relative;overflow:hidden;">
+      <input type="file" id="workCover" accept="image/*" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
+      选择封面
+    </label>
+    <p class="warn" id="workDialogError" hidden>封面请小于 15MB</p>
+    <button type="submit" class="go">创建</button>
+  </form>
+</dialog>
+
+<dialog id="addCardDialog">
+  <form id="addCardForm">
+    <div class="dialog-head">
+      <h2>添加组件</h2>
+      <button type="button" class="icon-btn" id="closeAddCardDialog" aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        <span class="icon-tip">关闭</span>
+      </button>
+    </div>
+    <div class="add-card-choices">
+      <button type="button" data-card-type="character">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4 20c1-5 4-7 8-7s7 2 8 7"/></svg>
+        人物卡
+      </button>
+      <button type="button" data-card-type="scene">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18L16 7l-5 8-3-3-5 7z"/></svg>
+        场景卡
+      </button>
+      <button type="button" data-card-type="prop">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10h16v10H4zM7 10V7h10v3M12 7V4"/></svg>
+        道具卡
+      </button>
+      <button type="button" data-card-type="text">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v3M5 12h10M5 19h7"/></svg>
+        文本卡
+      </button>
+      <button type="button" data-card-type="video">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12v12H4zM16 10l4-2v8l-4-2"/></svg>
+        视频卡
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<input type="file" id="cardFile" accept="image/*" hidden>
+
+<script src="app.js"></script>
+<script src="canvas.js"></script>
+</body>
+</html>

@@ -7,9 +7,10 @@
 # hand without reading SKILL.md first. The skill collects the api-key and
 # nickname from the user before invoking this script.
 #
-# Default source = the public GitHub template repo
-# (oliver0518/ai-video-workspace-template). Override with --source <dir> if
-# you keep a local copy.
+# Default source = the public GitHub repo that hosts both the skill and
+# the meta-project template (oliver0518/ai-video-workspace). The skill clones
+# itself and copies only the allowlisted meta-project files. Override with
+# --template-repo <owner/name> for fork-based setups.
 
 set -euo pipefail
 
@@ -19,7 +20,7 @@ API_KEY=""
 SOURCE=""
 DEST=""
 VISIBILITY="private"
-TEMPLATE_REPO="oliver0518/ai-video-workspace-template"
+TEMPLATE_REPO="oliver0518/ai-video-workspace"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -37,8 +38,10 @@ Usage: scaffold.sh --nickname <slug> --api-key <sk-...>
                    [--template-repo <owner/name>]
                    [--visibility public|private]
 
-If --source is not given, the script clones oliver0518/ai-video-workspace-template
-from GitHub into a temp dir and uses that as the template.
+If --source is not given, the script clones oliver0518/ai-video-workspace
+from GitHub into a temp dir and uses that as the template. The same repo
+hosts the skill itself; the denylist below strips SKILL.md / docs / scripts /
+references so the new workspace only gets the meta-project files.
 USAGE
       exit 0 ;;
     *)
@@ -120,17 +123,26 @@ ALLOWED_FILES=(
   static
 )
 # Explicit denylist, in case the allowlist ever misses a file the source has.
+# Skill-side files (SKILL.md, scripts/, references/, docs/) are also denied so
+# cloning the self-hosting ai-video-workspace repo doesn't drag the skill
+# itself into the new workspace.
 DENIED_PATTERNS=(
   ".env"          # real env file (contains previous user's API key)
   "jobs.json"     # queued jobs
-  "projects.json" # indexedDB cache
+  "projects.json" # IndexedDB cache
   "outputs"       # generated videos
   "__pycache__"   # python bytecode
   "build"         # pyinstaller output
   ".DS_Store"     # macOS metadata
   "*.pyc"
+  "*.part"
   "node_modules"
   ".venv"
+  "static/images" # user-generated AI images; each workspace gets its own
+  "SKILL.md"      # skill-side: not part of the workbench
+  "docs"          # skill-side: public landing page
+  "scripts"       # skill-side: the scaffold script itself
+  "references"    # skill-side: docs for the skill author
 )
 
 copy_allowed() {

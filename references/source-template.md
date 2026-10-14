@@ -9,17 +9,21 @@ self-contained — the user's agent does **not** need a local copy of the templa
 A GitHub repository containing the meta-project source (allowlisted files only,
 no user data). Two ways to point at it:
 
-1. **Default** — `oliver0518/ai-video-workspace-template` (public). The script runs
-   `gh repo clone oliver0518/ai-video-workspace-template <scratch> -- --depth 1`,
-   uses the clone as the source, and wipes the scratch dir on exit. No local
-   checkout is required.
+1. **Default** — `oliver0518/ai-video-workspace` (public). This is a self-hosted
+   repo that carries **both** the skill (`SKILL.md` / `scripts/` / `references/`
+   / `docs/`) **and** the allowlisted meta-project files at the repo root. The
+   script runs `gh repo clone oliver0518/ai-video-workspace <scratch> -- --depth 1`,
+   uses the clone as the source, applies the denylist to strip the skill-side
+   files (`SKILL.md / scripts/ / references/ / docs/`), copies only the
+   meta-project files into the new workspace, and wipes the scratch dir on
+   exit. No local checkout is required.
 2. **Override** — pass `--source <dir>` to the script (or `--template-repo
    <owner/name>` to point at a fork of the public template). Useful for testing
    local changes before publishing them upstream.
 
-The template repo is intentionally a thin mirror of the meta-project: same
-code, no `.env` / `jobs.json` / `projects.json` / `outputs/`. User data never
-leaves the local machine it belongs to.
+The repo is intentionally a thin mirror of the meta-project: same code, no
+`.env` / `jobs.json` / `projects.json` / `outputs/`. User data never leaves the
+local machine it belongs to.
 
 ## Files copied verbatim
 
@@ -73,21 +77,21 @@ workspace (e.g. a new config file, a new static asset dir), do all three:
 
 1. Add the file/dir to `ALLOWED_FILES` in `scripts/scaffold.sh`.
 2. Add it to "Files copied verbatim" above.
-3. Push the new file to `oliver0518/ai-video-workspace-template` (and the meta-project
+3. Push the new file to `oliver0518/ai-video-workspace` (and the meta-project
    itself, if it has a public home).
 
 Re-run the skill's eval round to confirm the new file lands in fresh repos.
 
 ## Forking / self-hosting
 
-If you fork the template under your own GitHub account, override at scaffold
+If you fork the repo under your own GitHub account, override at scaffold
 time:
 
 ```bash
 scaffold.sh --nickname me --api-key sk-... \
-            --template-repo <you>/ai-video-workspace-template \
+            --template-repo <you>/ai-video-workspace \
             --dest ~/Desktop/me-video-workbench
 ```
 
-This is the path for users who want to ship their own branded template, or for
-organizations that need a private template.
+This is the path for users who want to ship their own branded workbench, or for
+organizations that need a private one.
