@@ -21,6 +21,22 @@ no user data). Two ways to point at it:
    <owner/name>` to point at a fork of the public template). Useful for testing
    local changes before publishing them upstream.
 
+## Output directory naming
+
+The script writes the new workspace to **`~/Desktop/<nickname>-workspace`**
+when `--dest` is not given. The naming pattern (`<nickname>-workspace`) is
+part of the skill's output contract — changing it would break downstream
+docs and the skill's reporting. To put it elsewhere (e.g. on Linux where
+`~/Desktop` may not exist), pass `--dest` explicitly.
+
+## Local-only by default
+
+The scaffold script does **not** create a GitHub repo unless the user passes
+`--push`. The default flow produces a local directory + initial commit only;
+no `gh auth` is required and no remote is configured. This matches the
+common case where the user just wants a working workspace on their Desktop,
+not a published repository.
+
 The repo is intentionally a thin mirror of the meta-project: same code, no
 `.env` / `jobs.json` / `projects.json` / `outputs/`. User data never leaves the
 local machine it belongs to.
@@ -89,8 +105,9 @@ time:
 
 ```bash
 scaffold.sh --nickname me --api-key sk-... \
-            --template-repo <you>/ai-video-workspace \
-            --dest ~/Desktop/me-video-workbench
+            --template-repo <you>/ai-video-workspace
+# -> produces ~/Desktop/me-workspace (local-only)
+# add --push to also create a github.com/<you>/me-workspace repo
 ```
 
 This is the path for users who want to ship their own branded workbench, or for

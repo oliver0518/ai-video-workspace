@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Agnes Video Workbench scaffold.
-# Copies a whitelisted template directory into a fresh workspace, swaps in
-# the user's API key + nickname, and pushes to GitHub via `gh repo create`.
+# Agnes video workbench scaffold.
+# Copies a whitelisted template directory into a fresh workspace and swaps in
+# the user's API key + nickname. With --push it also creates a GitHub repo
+# via `gh repo create`. Without --push it is purely local.
 #
 # Designed to be called by the agnes-video-workbench skill — do not run by
 # hand without reading SKILL.md first. The skill collects the api-key and
@@ -21,6 +22,7 @@ SOURCE=""
 DEST=""
 VISIBILITY="private"
 TEMPLATE_REPO="oliver0518/ai-video-workspace"
+PUSH=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -30,18 +32,26 @@ while [[ $# -gt 0 ]]; do
     --dest)          DEST="$2"; shift 2 ;;
     --visibility)    VISIBILITY="$2"; shift 2 ;;
     --template-repo) TEMPLATE_REPO="$2"; shift 2 ;;
+    --push)          PUSH=1; shift ;;
     -h|--help)
       cat <<USAGE
 Usage: scaffold.sh --nickname <slug> --api-key <sk-...>
-                   --dest <workspace-dir>
+                   [--dest <workspace-dir>]
+                   [--push]
                    [--source <template-dir>]
                    [--template-repo <owner/name>]
                    [--visibility public|private]
 
-If --source is not given, the script clones oliver0518/ai-video-workspace
-from GitHub into a temp dir and uses that as the template. The same repo
-hosts the skill itself; the denylist below strips SKILL.md / docs / scripts /
-references so the new workspace only gets the meta-project files.
+If --dest is not given, the script defaults to:
+  ~/Desktop/<nickname>-workspace
+
+By default this is a LOCAL-ONLY scaffold (no GitHub repo is created, no
+remote is configured). Pass --push to also create a private repo under
+your gh account and push.
+
+The source defaults to oliver0518/ai-video-workspace on GitHub. The
+denylist below strips SKILL.md / docs / scripts / references so the new
+workspace only gets the meta-project files.
 USAGE
       exit 0 ;;
     *)
@@ -50,8 +60,8 @@ USAGE
 done
 
 # ---- validate --------------------------------------------------------------
-if [[ -z "$NICKNAME" || -z "$API_KEY" || -z "$DEST" ]]; then
-  echo "missing required arg (--nickname / --api-key / --dest)" >&2
+if [[ -z "$NICKNAME" || -z "$API_KEY" ]]; then
+  echo "missing required arg (--nickname / --api-key)" >&2
   exit 2
 fi
 if ! [[ "$NICKNAME" =~ ^[a-z0-9][a-z0-9-]{1,30}$ ]]; then
@@ -62,28 +72,39 @@ if ! [[ "$API_KEY" =~ ^sk-[A-Za-z0-9]+$ ]]; then
   echo "api-key must look like sk-XXXX — got: ${API_KEY:0:4}..." >&2
   exit 2
 fi
-if ! command -v gh >/dev/null 2>&1; then
-  echo "gh CLI not installed — run: brew install gh" >&2
-  exit 2
-fi
-if ! gh auth status >/dev/null 2>&1; then
-  echo "gh not logged in — run: gh auth login" >&2
-  exit 2
-fi
-if [[ "$VISIBILITY" != "public" && "$VISIBILITY" != "private" ]]; then
-  echo "visibility must be public or private — got: $VISIBILITY" >&2
-  exit 2
+# Default dest if not provided: ~/Desktop/<nickname>-workspace. The
+# convention "<nickname>-workspace" is part of the skill's output contract —
+# changing it would break downstream docs and the skill's reporting.
+if [[ -z "$DEST" ]]; then
+  DEST="$HOME/Desktop/${NICKNAME}-workspace"
+  echo "==> using default dest: $DEST"
 fi
 if [[ -e "$DEST" ]]; then
   echo "dest already exists (refusing to overwrite): $DEST" >&2
   exit 2
+fi
+# gh checks are only required when --push is set. Local-only scaffolds do
+# not need a GitHub account, network, or even git installed at the
+# validation step.
+if [[ $PUSH -eq 1 ]]; then
+  if [[ "$VISIBILITY" != "public" && "$VISIBILITY" != "private" ]]; then
+    echo "visibility must be public or private — got: $VISIBILITY" >&2
+    exit 2
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "gh CLI not installed — run: brew install gh" >&2
+    exit 2
+  fi
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "gh not logged in — run: gh auth login" >&2
+    exit 2
+  fi
 fi
 
 # ---- 0. resolve template source ---------------------------------------------
 # If the user didn't pass --source, clone the public template repo into a
 # scratch dir and use that. This makes the skill self-contained — no local
 # template path required.
-SOURCE_MODE="local"
 SOURCE_CLEANUP=""
 if [[ -z "$SOURCE" ]]; then
   if ! command -v git >/dev/null 2>&1; then
@@ -97,7 +118,6 @@ if [[ -z "$SOURCE" ]]; then
     exit 2
   fi
   SOURCE="$SCRATCH"
-  SOURCE_MODE="remote"
   SOURCE_CLEANUP="$SCRATCH"
   trap 'rm -rf "$SOURCE_CLEANUP" 2>/dev/null || true' EXIT
 fi
@@ -107,7 +127,9 @@ if [[ ! -d "$SOURCE" ]]; then
 fi
 
 # ---- 1. copy whitelist, skip user-data --------------------------------------
-REPO_NAME="agnes-video-workbench-$NICKNAME"
+# Repo name (when --push) is derived from the destination basename so local
+# and remote identities always match.
+REPO_NAME="$(basename "$DEST")"
 
 mkdir -p "$DEST"
 echo "==> copying template files from $SOURCE to $DEST"
@@ -144,15 +166,6 @@ DENIED_PATTERNS=(
   "scripts"       # skill-side: the scaffold script itself
   "references"    # skill-side: docs for the skill author
 )
-
-copy_allowed() {
-  local entry
-  for entry in "${ALLOWED_FILES[@]}"; do
-    if [[ -e "$SOURCE/$entry" ]]; then
-      cp -R "$SOURCE/$entry" "$DEST/"
-    fi
-  done
-}
 
 is_denied() {
   local name="$1"
@@ -255,38 +268,50 @@ for pat in "${DENIED_PATTERNS[@]}"; do
 done
 
 git init -q -b main
-git config user.name >/dev/null 2>&1 || git config user.name "$(gh api user --jq .login 2>/dev/null || echo agnes-scaffold)"
-git config user.email >/dev/null 2>&1 || git config user.email "scaffold@agnes.local"
+# Use the gh account's login as author when available, otherwise a neutral
+# fallback. Never use the previous user's identity.
+if [[ $PUSH -eq 1 ]] && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  git config user.name "$(gh api user --jq .login 2>/dev/null || echo agnes-scaffold)"
+  git config user.email "$(gh api user --jq .email 2>/dev/null || echo scaffold@agnes.local)"
+else
+  git config user.name "agnes-scaffold"
+  git config user.email "scaffold@agnes.local"
+fi
 git add .
 git commit -q -m "chore: initial scaffold for $REPO_NAME"
 echo "==> initial commit created"
 
-# ---- 5. gh repo create + push ----------------------------------------------
-# Handle name collision by appending -2, -3, ...
+# ---- 5. optional gh repo create + push --------------------------------------
+REPO_URL=""
 attempt="$REPO_NAME"
-for i in 2 3 4 5 6 7 8 9; do
+if [[ $PUSH -eq 1 ]]; then
+  # Handle name collision by appending -2, -3, ...
+  for i in 2 3 4 5 6 7 8 9; do
+    if gh repo view "$attempt" >/dev/null 2>&1; then
+      attempt="${REPO_NAME}-${i}"
+    else
+      break
+    fi
+  done
   if gh repo view "$attempt" >/dev/null 2>&1; then
-    attempt="${REPO_NAME}-${i}"
-  else
-    break
+    echo "could not find an unused repo name after 9 attempts — giving up" >&2
+    exit 2
   fi
-done
-if gh repo view "$attempt" >/dev/null 2>&1; then
-  echo "could not find an unused repo name after 9 attempts — giving up" >&2
-  exit 2
+
+  echo "==> creating GitHub repo: $attempt ($VISIBILITY)"
+  gh repo create "$attempt" \
+    --source=. \
+    --push \
+    --"$VISIBILITY" \
+    --description "Agnes AI video workbench for $NICKNAME" \
+    --homepage "https://github.com/$attempt" \
+    || { echo "gh repo create failed" >&2; exit 2; }
+
+  OWNER="$(gh repo view --json owner -q .owner.login "$attempt")"
+  REPO_URL="https://github.com/$OWNER/$attempt"
+else
+  echo "==> skipping GitHub (local-only mode; pass --push to publish)"
 fi
-
-echo "==> creating GitHub repo: $attempt ($VISIBILITY)"
-gh repo create "$attempt" \
-  --source=. \
-  --push \
-  --"$VISIBILITY" \
-  --description "Agnes AI video workbench for $NICKNAME" \
-  --homepage "https://github.com/$attempt" \
-  || { echo "gh repo create failed" >&2; exit 2; }
-
-OWNER="$(gh repo view --json owner -q .owner.login "$attempt")"
-REPO_URL="https://github.com/$OWNER/$attempt"
 
 # Final report (consumed by the skill — keep stable format).
 cat <<REPORT
@@ -294,6 +319,7 @@ workspace_ready
 local=$DEST
 repo=$REPO_URL
 repo_name=$attempt
+pushed=$PUSH
 visibility=$VISIBILITY
 start_cmd=cd "$DEST" && bash 启动工作台.command
 key_tail=${API_KEY: -4}

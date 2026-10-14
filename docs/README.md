@@ -1,23 +1,31 @@
 # agnes-video-workbench
 
-MiniMax Code skill that scaffolds a fresh **Agnes AI video workbench** for a user from
-their API key + nickname, and pushes the new workspace to GitHub.
+MiniMax Code skill that scaffolds a fresh **Agnes AI video workbench** for a user
+from their API key + nickname.
 
 When a user says *"帮我搭一个 agnes 工作台，nickname 用 `xxx`"*, the model loads this
-skill, asks for the two missing values, then runs a single deterministic script that
-copies the meta-project template, writes a clean `.env`, and pushes the new repo via
-`gh repo create`.
+skill, asks for the two missing values, then runs a single deterministic script
+that copies the meta-project template and writes a clean `.env` to
+`~/Desktop/<nickname>-workspace`.
+
+By default the scaffold is **local-only** — no GitHub repo is created, no `gh`
+authentication is required, and no remote is configured. Pass `--push` to the
+script (or ask the user before running it) to also create a private GitHub repo
+and push.
 
 ## Quick start (as a skill consumer)
 
-1. Make sure `gh auth status` reports a logged-in user — this skill will not work
-   without it.
-2. Trigger the skill with one of the natural-language prompts listed in
+1. Trigger the skill with one of the natural-language prompts listed in
    [`SKILL.md`](./SKILL.md) (frontmatter `description`).
-3. The skill will ask for:
+2. The skill will ask for:
    - **Agnes API key** — must match `^sk-[A-Za-z0-9]+$`
    - **Nickname** — slug matching `^[a-z0-9][a-z0-9-]{1,30}$`
-4. The skill reports back: local path, repo URL, start command, masked key.
+   - **Push to GitHub?** — defaults to no. Say "推到 GitHub" / "publish" to opt in.
+3. The skill reports back: local path, optional repo URL, start command, masked key.
+
+`gh` is only required if you opted into `--push`. For a local-only scaffold you
+don't need a GitHub account, a network connection (beyond the initial template
+clone), or even `gh` installed.
 
 ## Files
 
@@ -29,21 +37,24 @@ references/source-template.md  allowlist/denylist contract for the template
 
 ## What the script does
 
-For each run, given `--nickname`, `--api-key`, `--source <meta-project>`, and
-`--dest <workspace>`:
+For each run, given `--nickname`, `--api-key`, and (optionally) `--dest`,
+`--push`, `--source`, `--template-repo`, `--visibility`:
 
 1. **Copies** an allowlist of template files (`app.py`, `static/`, `.env.example`,
    `启动工作台.command`, `需求文档.md`, `.gitignore`). Explicitly **skips** user-data
    files (`.env` real, `jobs.json`, `projects.json`, `outputs/`, `__pycache__/`,
-   `build/`, `.DS_Store`).
-2. **Writes** a fresh `.env` from `.env.example` with the user's key + nickname, then
-   `chmod 600`.
+   `build/`, `.DS_Store`) and skill-side files (`SKILL.md`, `scripts/`,
+   `references/`, `docs/`) so the skill never ships into a scaffolded workbench.
+2. **Writes** a fresh `.env` from `.env.example` with the user's key + nickname,
+   then `chmod 600`.
 3. **Replaces** `<nickname>` / `{{nickname}}` placeholders inside allowlisted
    text files (skips `app.py` and `.env`, which have their own config paths).
 4. **Initialises git** in the new workspace, ensures the denylist is in
    `.gitignore`, commits.
-5. **Pushes** via `gh repo create agnes-video-workbench-<slug> --source=. --push
+5. **Only with `--push`**: `gh repo create <nickname>-workspace --source=. --push
    --<visibility>`. Auto-appends `-2..-9` if the name is taken.
+
+If `--dest` is not given, the script writes to `~/Desktop/<nickname>-workspace`.
 
 ## Updating the template
 
@@ -56,10 +67,13 @@ fresh workspace, update both:
 
 ## Source template
 
-Default: `/Users/Oliver/Desktop/秋白视频工作台` (the meta-project that produced
-this skill). Override with `--source <dir>` if the template lives elsewhere.
+Default: `oliver0518/ai-video-workspace` on GitHub. This single repo carries
+both the skill (`SKILL.md` / `scripts/` / `references/` / `docs/`) and the
+allowlisted meta-project files at the repo root — the denylist in
+`scaffold.sh` strips the skill-side files before copying into a new workspace.
+Override with `--template-repo <owner/name>` if you fork it.
 
 ## License
 
-This skill is provided as-is for personal use; the workspaces it scaffolds inherit
-the licensing of the source meta-project.
+This skill is provided as-is for personal use; the workspaces it scaffolds
+inherit the licensing of the source meta-project.
