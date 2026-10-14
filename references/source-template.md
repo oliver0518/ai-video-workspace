@@ -1,13 +1,25 @@
 # Source Template Layout
 
-The scaffold script copies from a fixed source directory (the reference implementation
-of an Agnes video workbench) into a fresh workspace. The skill's `SKILL.md` procedure
-assumes this layout; if the source moves, update this file and re-publish.
+The scaffold script pulls a whitelisted set of files from a public template
+repository and rewrites user-specific placeholders. The skill is fully
+self-contained — the user's agent does **not** need a local copy of the template.
 
-## Expected source location
+## Default source
 
-Default: `/Users/Oliver/Desktop/秋白视频工作台` (the meta-project that produced this
-skill). Override with `--source <dir>` if the user keeps the template elsewhere.
+A GitHub repository containing the meta-project source (allowlisted files only,
+no user data). Two ways to point at it:
+
+1. **Default** — `oliver0518/ai-video-workspace-template` (public). The script runs
+   `gh repo clone oliver0518/ai-video-workspace-template <scratch> -- --depth 1`,
+   uses the clone as the source, and wipes the scratch dir on exit. No local
+   checkout is required.
+2. **Override** — pass `--source <dir>` to the script (or `--template-repo
+   <owner/name>` to point at a fork of the public template). Useful for testing
+   local changes before publishing them upstream.
+
+The template repo is intentionally a thin mirror of the meta-project: same
+code, no `.env` / `jobs.json` / `projects.json` / `outputs/`. User data never
+leaves the local machine it belongs to.
 
 ## Files copied verbatim
 
@@ -51,13 +63,31 @@ their own config paths), the script rewrites the following placeholders:
 | `WORKBENCH_NICK=*` | the user's slug        | `.env` only                |
 
 If a file outside the allowlist needs the placeholder substituted, add it to
-`ALLOWED_FILES` in `scripts/scaffold.sh` and re-publish.
+`ALLOWED_FILES` in `scripts/scaffold.sh` and re-publish both this skill and the
+template repo.
 
-## How to keep this skill up to date
+## How to keep the template in sync with the meta-project
 
 When the meta-project gains a new top-level file the user wants in every fresh
-workspace (e.g. a new config file, a new static asset dir), update both:
+workspace (e.g. a new config file, a new static asset dir), do all three:
 
-1. `scripts/scaffold.sh` — add the file/dir to `ALLOWED_FILES`.
-2. This file — add it to "Files copied verbatim".
-3. Re-run the skill's eval round to confirm the new file lands in fresh repos.
+1. Add the file/dir to `ALLOWED_FILES` in `scripts/scaffold.sh`.
+2. Add it to "Files copied verbatim" above.
+3. Push the new file to `oliver0518/ai-video-workspace-template` (and the meta-project
+   itself, if it has a public home).
+
+Re-run the skill's eval round to confirm the new file lands in fresh repos.
+
+## Forking / self-hosting
+
+If you fork the template under your own GitHub account, override at scaffold
+time:
+
+```bash
+scaffold.sh --nickname me --api-key sk-... \
+            --template-repo <you>/ai-video-workspace-template \
+            --dest ~/Desktop/me-video-workbench
+```
+
+This is the path for users who want to ship their own branded template, or for
+organizations that need a private template.

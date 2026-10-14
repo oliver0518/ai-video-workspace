@@ -37,24 +37,26 @@ Never ask for: GitHub owner (use `gh` CLI's logged-in account), git author (use
 1. **Verify environment** before collecting inputs:
    - `command -v gh` returns a path; `gh auth status` reports a logged-in user.
      If not, stop and tell the user to run `gh auth login` first.
-   - `command -v git` and `command -v node` are available.
-   - The current working directory or the user's Desktop contains the source template
-     (see `references/source-template.md`). If the template is not present at the
-     expected path, stop and tell the user where to find it.
+   - `command -v git` is available (needed only when fetching the remote template).
+   - The user can write to the chosen destination parent dir (default `~/Desktop`).
 
 2. **Collect inputs** — use the AskUserQuestion tool (or equivalent `ask_user`) with one
    question that has two text inputs (api key + nickname). Mention the slug format
    rule in the question.
 
 3. **Run the scaffold** — `bash scripts/scaffold.sh --nickname <slug> --api-key <sk>
-   --source <template-dir> --dest <dest-dir> --visibility <public|private>`. The script
+   --dest <dest-dir> [--source <template-dir>] [--visibility <public|private>]`. The script
    is deterministic and does five things in order:
 
+   0. **Fetch the template** if `--source` was not given. Default = `gh repo clone
+      oliver0518/ai-video-workspace-template` into a scratch dir (cloned with `--depth 1`).
+      The scratch dir is wiped on exit. Reason: this keeps the skill self-contained —
+      users do not need a local copy of the template on disk.
    1. Copy the whitelist of template files (see `references/source-template.md`) from
       `<source>` to `<dest>/`, skipping user-data files (`.env` real, `jobs.json`,
       `projects.json`, `outputs/`, `__pycache__/`, `build/`, `.DS_Store`).
-      Reason: the template contains the previous user's API key, jobs, and cached
-      build artifacts — copying them would leak the previous user and bloat the
+      Reason: the template might still carry the previous user's API key, jobs, and
+      cached build artifacts — copying them would leak the previous user and bloat the
       new repo.
    2. Write `<dest>/.env` from `.env.example`, substituting `AGNES_API_KEY=<key>` and
       `WORKBENCH_NICK=<slug>`. The script refuses to leave the previous user's

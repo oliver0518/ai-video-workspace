@@ -6,6 +6,10 @@
 # Designed to be called by the agnes-video-workbench skill — do not run by
 # hand without reading SKILL.md first. The skill collects the api-key and
 # nickname from the user before invoking this script.
+#
+# Default source = the public GitHub template repo
+# (oliver0518/ai-video-workspace-template). Override with --source <dir> if
+# you keep a local copy.
 
 set -euo pipefail
 
@@ -15,19 +19,26 @@ API_KEY=""
 SOURCE=""
 DEST=""
 VISIBILITY="private"
+TEMPLATE_REPO="oliver0518/ai-video-workspace-template"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --nickname)   NICKNAME="$2"; shift 2 ;;
-    --api-key)    API_KEY="$2"; shift 2 ;;
-    --source)     SOURCE="$2"; shift 2 ;;
-    --dest)       DEST="$2"; shift 2 ;;
-    --visibility) VISIBILITY="$2"; shift 2 ;;
+    --nickname)      NICKNAME="$2"; shift 2 ;;
+    --api-key)       API_KEY="$2"; shift 2 ;;
+    --source)        SOURCE="$2"; shift 2 ;;
+    --dest)          DEST="$2"; shift 2 ;;
+    --visibility)    VISIBILITY="$2"; shift 2 ;;
+    --template-repo) TEMPLATE_REPO="$2"; shift 2 ;;
     -h|--help)
       cat <<USAGE
 Usage: scaffold.sh --nickname <slug> --api-key <sk-...>
-                   --source <template-dir> --dest <workspace-dir>
+                   --dest <workspace-dir>
+                   [--source <template-dir>]
+                   [--template-repo <owner/name>]
                    [--visibility public|private]
+
+If --source is not given, the script clones oliver0518/ai-video-workspace-template
+from GitHub into a temp dir and uses that as the template.
 USAGE
       exit 0 ;;
     *)
@@ -36,8 +47,8 @@ USAGE
 done
 
 # ---- validate --------------------------------------------------------------
-if [[ -z "$NICKNAME" || -z "$API_KEY" || -z "$SOURCE" || -z "$DEST" ]]; then
-  echo "missing required arg (--nickname / --api-key / --source / --dest)" >&2
+if [[ -z "$NICKNAME" || -z "$API_KEY" || -z "$DEST" ]]; then
+  echo "missing required arg (--nickname / --api-key / --dest)" >&2
   exit 2
 fi
 if ! [[ "$NICKNAME" =~ ^[a-z0-9][a-z0-9-]{1,30}$ ]]; then
@@ -46,10 +57,6 @@ if ! [[ "$NICKNAME" =~ ^[a-z0-9][a-z0-9-]{1,30}$ ]]; then
 fi
 if ! [[ "$API_KEY" =~ ^sk-[A-Za-z0-9]+$ ]]; then
   echo "api-key must look like sk-XXXX — got: ${API_KEY:0:4}..." >&2
-  exit 2
-fi
-if [[ ! -d "$SOURCE" ]]; then
-  echo "source template not found: $SOURCE" >&2
   exit 2
 fi
 if ! command -v gh >/dev/null 2>&1; then
@@ -66,6 +73,33 @@ if [[ "$VISIBILITY" != "public" && "$VISIBILITY" != "private" ]]; then
 fi
 if [[ -e "$DEST" ]]; then
   echo "dest already exists (refusing to overwrite): $DEST" >&2
+  exit 2
+fi
+
+# ---- 0. resolve template source ---------------------------------------------
+# If the user didn't pass --source, clone the public template repo into a
+# scratch dir and use that. This makes the skill self-contained — no local
+# template path required.
+SOURCE_MODE="local"
+SOURCE_CLEANUP=""
+if [[ -z "$SOURCE" ]]; then
+  if ! command -v git >/dev/null 2>&1; then
+    echo "git not installed — required to fetch the default template" >&2
+    exit 2
+  fi
+  SCRATCH="${TMPDIR:-/tmp}/agnes-scaffold-$$-$RANDOM"
+  echo "==> cloning template repo: $TEMPLATE_REPO -> $SCRATCH"
+  if ! gh repo clone "$TEMPLATE_REPO" "$SCRATCH" -- --depth 1 >/dev/null 2>&1; then
+    echo "failed to clone $TEMPLATE_REPO — check repo exists and you have access" >&2
+    exit 2
+  fi
+  SOURCE="$SCRATCH"
+  SOURCE_MODE="remote"
+  SOURCE_CLEANUP="$SCRATCH"
+  trap 'rm -rf "$SOURCE_CLEANUP" 2>/dev/null || true' EXIT
+fi
+if [[ ! -d "$SOURCE" ]]; then
+  echo "source template not found: $SOURCE" >&2
   exit 2
 fi
 
