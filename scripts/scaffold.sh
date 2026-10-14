@@ -264,7 +264,11 @@ fi
 placeholder_count=0
 for f in "${files_to_rewrite[@]}"; do
   if [[ -f "$f" ]]; then
-    before=$(grep -c "<nickname>\|{{nickname}}" "$f" 2>/dev/null || echo 0)
+    # Cross-platform match for both placeholder styles. Use -e so BSD grep
+    # (macOS) and GNU grep both treat this as two alternates without us
+    # relying on backslash-pipe syntax that BSD doesn't understand.
+    before=$(grep -c -e "<nickname>" -e "{{nickname}}" "$f" 2>/dev/null || true)
+    [[ -z "$before" ]] && before=0
     sed "${SED_INPLACE[@]}" "s/<nickname>/$NICKNAME/g; s/{{nickname}}/$NICKNAME/g" "$f"
     placeholder_count=$((placeholder_count + before))
   fi
